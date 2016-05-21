@@ -1,14 +1,228 @@
+
+<!doctype html>
+<!--
+Copyright 2016 Google Inc. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="Sample illustrating the use of Service Worker Sample: Custom Offline Page.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Service Worker Sample: Custom Offline Page Sample</title>
+    <script>
+      // If we're running on a real web server (as opposed to localhost, which is whitelisted),
+      // then change the protocol to HTTPS.
+      // See https://goo.gl/lq4gCo for an explanation as to why this is needed for some features.
+      (function() {
+        var isLocalhost = !!(window.location.hostname === 'localhost' ||
+          // [::1] is the IPv6 localhost address.
+          window.location.hostname === '[::1]' ||
+          // 127.0.0.1/8 is considered localhost for IPv4.
+          window.location.hostname.match(/^127(?:\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/));
+        if (window.location.protocol === 'http:' && !isLocalhost) {
+          // Redirect to https: if we're currently using http: and we're not on localhost.
+          window.location.protocol = 'https:';
+        }
+      })();
+
+      // Add a global error event listener early on in the page load, to help ensure that browsers
+      // which don't support specific functionality still end up displaying a meaningful message.
+      window.addEventListener('error', function(error) {
+        if (ChromeSamples && ChromeSamples.setStatus) {
+          ChromeSamples.setStatus(error.message + ' (Your browser may not support this feature.)');
+          error.preventDefault();
+        }
+      });
+    </script>
+
+
+
+    <link rel="icon" href="../../images/favicon.ico">
+
+    <link rel="stylesheet" href="../../styles/main.css">
+
+
+  </head>
+
+  <body>
+
+    <h1>Service Worker Sample: Custom Offline Page Sample</h1>
+    <p class="availability">
+      Available in <a target="_blank" href="https://www.chromestatus.com/feature/6561526227927040">Chrome 40+</a> |
+      <a target="_blank" href="view-source:https://googlechrome.github.io/samples/service-worker/custom-offline-page/">View Source</a> |
+      <a target="_blank" href="https://github.com/googlechrome/samples/blob/gh-pages/service-worker/custom-offline-page/">View on GitHub</a> |
+      <a target="_blank" href="https://www.chromestatus.com/samples">Browse Samples</a>
+    </p>
+    <h3>Background</h3>
 <p>
   This sample demonstrates basic service worker registration. During the installation step, a
-    custom "Sorry, you're offline." page is cached. The service worker handles all fetch requests
-      for HTML pages (ignoring other requests), and if fetching an HTML page fails due to a network
-        error, it will instead return the cached "offline" page.
-        </p>
+  custom "Sorry, you're offline." page is cached. The service worker handles all fetch requests
+  for HTML pages (ignoring other requests), and if fetching an HTML page fails due to a network
+  error, it will instead return the cached "offline" page.
+</p>
 
-        <p>
-          Try disconnecting from your network, and then reload this page.
-          </p>
+<p>
+  Try disconnecting from your network, and then reload this page.
+</p>
 
-          {% include js_snippet.html filename='index.js' title="This Page's JavaScript" %}
-          {% include js_snippet.html filename='service-worker.js' displayonly=true title="Service Worker's JavaScript" %}
 
+
+
+      <script>if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js');
+}
+</script>
+
+
+
+
+    <h3>This Page's JavaScript</h3>
+
+
+
+    <figure class="highlight"><pre><code class="language-js" data-lang="js"><span class="k">if</span> <span class="p">(</span><span class="s1">'serviceWorker'</span> <span class="k">in</span> <span class="nx">navigator</span><span class="p">)</span> <span class="p">{</span>
+  <span class="nx">navigator</span><span class="p">.</span><span class="nx">serviceWorker</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s1">'service-worker.js'</span><span class="p">);</span>
+<span class="p">}</span></code></pre></figure>
+
+
+
+
+
+
+
+    <h3>Service Worker's JavaScript</h3>
+
+
+
+    <figure class="highlight"><pre><code class="language-js" data-lang="js"><span class="cm">/*
+ Copyright 2015 Google Inc. All Rights Reserved.
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+ http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/</span>
+
+<span class="s1">'use strict'</span><span class="p">;</span>
+
+<span class="c1">// Incrementing CACHE_VERSION will kick off the install event and force previously cached</span>
+<span class="c1">// resources to be cached again.</span>
+<span class="kr">const</span> <span class="nx">CACHE_VERSION</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+<span class="kd">let</span> <span class="nx">CURRENT_CACHES</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="na">offline</span><span class="p">:</span> <span class="s1">'offline-v'</span> <span class="o">+</span> <span class="nx">CACHE_VERSION</span>
+<span class="p">};</span>
+<span class="kr">const</span> <span class="nx">OFFLINE_URL</span> <span class="o">=</span> <span class="s1">'offline.html'</span><span class="p">;</span>
+
+<span class="kd">function</span> <span class="nx">createCacheBustedRequest</span><span class="p">(</span><span class="nx">url</span><span class="p">)</span> <span class="p">{</span>
+  <span class="kd">let</span> <span class="nx">request</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Request</span><span class="p">(</span><span class="nx">url</span><span class="p">,</span> <span class="p">{</span><span class="na">cache</span><span class="p">:</span> <span class="s1">'reload'</span><span class="p">});</span>
+  <span class="c1">// See https://fetch.spec.whatwg.org/#concept-request-mode</span>
+  <span class="c1">// This is not yet supported in Chrome as of M48, so we need to explicitly check to see</span>
+  <span class="c1">// if the cache: 'reload' option had any effect.</span>
+  <span class="k">if</span> <span class="p">(</span><span class="s1">'cache'</span> <span class="k">in</span> <span class="nx">request</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="nx">request</span><span class="p">;</span>
+  <span class="p">}</span>
+
+  <span class="c1">// If {cache: 'reload'} didn't have any effect, append a cache-busting URL parameter instead.</span>
+  <span class="kd">let</span> <span class="nx">bustedUrl</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">URL</span><span class="p">(</span><span class="nx">url</span><span class="p">,</span> <span class="nx">self</span><span class="p">.</span><span class="nx">location</span><span class="p">.</span><span class="nx">href</span><span class="p">);</span>
+  <span class="nx">bustedUrl</span><span class="p">.</span><span class="nx">search</span> <span class="o">+=</span> <span class="p">(</span><span class="nx">bustedUrl</span><span class="p">.</span><span class="nx">search</span> <span class="p">?</span> <span class="s1">'&amp;'</span> <span class="p">:</span> <span class="s1">''</span><span class="p">)</span> <span class="o">+</span> <span class="s1">'cachebust='</span> <span class="o">+</span> <span class="nb">Date</span><span class="p">.</span><span class="nx">now</span><span class="p">();</span>
+  <span class="k">return</span> <span class="k">new</span> <span class="nx">Request</span><span class="p">(</span><span class="nx">bustedUrl</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nx">self</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s1">'install'</span><span class="p">,</span> <span class="nx">event</span> <span class="o">=&gt;</span> <span class="p">{</span>
+  <span class="nx">event</span><span class="p">.</span><span class="nx">waitUntil</span><span class="p">(</span>
+    <span class="c1">// We can't use cache.add() here, since we want OFFLINE_URL to be the cache key, but</span>
+    <span class="c1">// the actual URL we end up requesting might include a cache-busting parameter.</span>
+    <span class="nx">fetch</span><span class="p">(</span><span class="nx">createCacheBustedRequest</span><span class="p">(</span><span class="nx">OFFLINE_URL</span><span class="p">)).</span><span class="nx">then</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">response</span><span class="p">)</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="nx">caches</span><span class="p">.</span><span class="nx">open</span><span class="p">(</span><span class="nx">CURRENT_CACHES</span><span class="p">.</span><span class="nx">offline</span><span class="p">).</span><span class="nx">then</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">cache</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="nx">cache</span><span class="p">.</span><span class="nx">put</span><span class="p">(</span><span class="nx">OFFLINE_URL</span><span class="p">,</span> <span class="nx">response</span><span class="p">);</span>
+      <span class="p">});</span>
+    <span class="p">})</span>
+  <span class="p">);</span>
+<span class="p">});</span>
+
+<span class="nx">self</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s1">'activate'</span><span class="p">,</span> <span class="nx">event</span> <span class="o">=&gt;</span> <span class="p">{</span>
+  <span class="c1">// Delete all caches that aren't named in CURRENT_CACHES.</span>
+  <span class="c1">// While there is only one cache in this example, the same logic will handle the case where</span>
+  <span class="c1">// there are multiple versioned caches.</span>
+  <span class="kd">let</span> <span class="nx">expectedCacheNames</span> <span class="o">=</span> <span class="nb">Object</span><span class="p">.</span><span class="nx">keys</span><span class="p">(</span><span class="nx">CURRENT_CACHES</span><span class="p">).</span><span class="nx">map</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">key</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="nx">CURRENT_CACHES</span><span class="p">[</span><span class="nx">key</span><span class="p">];</span>
+  <span class="p">});</span>
+
+  <span class="nx">event</span><span class="p">.</span><span class="nx">waitUntil</span><span class="p">(</span>
+    <span class="nx">caches</span><span class="p">.</span><span class="nx">keys</span><span class="p">().</span><span class="nx">then</span><span class="p">(</span><span class="nx">cacheNames</span> <span class="o">=&gt;</span> <span class="p">{</span>
+      <span class="k">return</span> <span class="nx">Promise</span><span class="p">.</span><span class="nx">all</span><span class="p">(</span>
+        <span class="nx">cacheNames</span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="nx">cacheName</span> <span class="o">=&gt;</span> <span class="p">{</span>
+          <span class="k">if</span> <span class="p">(</span><span class="nx">expectedCacheNames</span><span class="p">.</span><span class="nx">indexOf</span><span class="p">(</span><span class="nx">cacheName</span><span class="p">)</span> <span class="o">===</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+            <span class="c1">// If this cache name isn't present in the array of "expected" cache names,</span>
+            <span class="c1">// then delete it.</span>
+            <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'Deleting out of date cache:'</span><span class="p">,</span> <span class="nx">cacheName</span><span class="p">);</span>
+            <span class="k">return</span> <span class="nx">caches</span><span class="p">.</span><span class="k">delete</span><span class="p">(</span><span class="nx">cacheName</span><span class="p">);</span>
+          <span class="p">}</span>
+        <span class="p">})</span>
+      <span class="p">);</span>
+    <span class="p">})</span>
+  <span class="p">);</span>
+<span class="p">});</span>
+
+<span class="nx">self</span><span class="p">.</span><span class="nx">addEventListener</span><span class="p">(</span><span class="s1">'fetch'</span><span class="p">,</span> <span class="nx">event</span> <span class="o">=&gt;</span> <span class="p">{</span>
+  <span class="c1">// We only want to call event.respondWith() if this is a navigation request</span>
+  <span class="c1">// for an HTML page.</span>
+  <span class="c1">// request.mode of 'navigate' is unfortunately not supported in Chrome</span>
+  <span class="c1">// versions older than 49, so we need to include a less precise fallback,</span>
+  <span class="c1">// which checks for a GET request with an Accept: text/html header.</span>
+  <span class="k">if</span> <span class="p">(</span><span class="nx">event</span><span class="p">.</span><span class="nx">request</span><span class="p">.</span><span class="nx">mode</span> <span class="o">===</span> <span class="s1">'navigate'</span> <span class="o">||</span>
+      <span class="p">(</span><span class="nx">event</span><span class="p">.</span><span class="nx">request</span><span class="p">.</span><span class="nx">method</span> <span class="o">===</span> <span class="s1">'GET'</span> <span class="o">&amp;&amp;</span>
+       <span class="nx">event</span><span class="p">.</span><span class="nx">request</span><span class="p">.</span><span class="nx">headers</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">'accept'</span><span class="p">).</span><span class="nx">includes</span><span class="p">(</span><span class="s1">'text/html'</span><span class="p">)))</span> <span class="p">{</span>
+    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'Handling fetch event for'</span><span class="p">,</span> <span class="nx">event</span><span class="p">.</span><span class="nx">request</span><span class="p">.</span><span class="nx">url</span><span class="p">);</span>
+    <span class="nx">event</span><span class="p">.</span><span class="nx">respondWith</span><span class="p">(</span>
+      <span class="nx">fetch</span><span class="p">(</span><span class="nx">createCacheBustedRequest</span><span class="p">(</span><span class="nx">event</span><span class="p">.</span><span class="nx">request</span><span class="p">.</span><span class="nx">url</span><span class="p">)).</span><span class="k">catch</span><span class="p">(</span><span class="nx">error</span> <span class="o">=&gt;</span> <span class="p">{</span>
+        <span class="c1">// The catch is only triggered if fetch() throws an exception, which will most likely</span>
+        <span class="c1">// happen due to the server being unreachable.</span>
+        <span class="c1">// If fetch() returns a valid HTTP response with an response code in the 4xx or 5xx</span>
+        <span class="c1">// range, the catch() will NOT be called. If you need custom handling for 4xx or 5xx</span>
+        <span class="c1">// errors, see https://github.com/GoogleChrome/samples/tree/gh-pages/service-worker/fallback-response</span>
+        <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">'Fetch failed; returning offline page instead.'</span><span class="p">,</span> <span class="nx">error</span><span class="p">);</span>
+        <span class="k">return</span> <span class="nx">caches</span><span class="p">.</span><span class="nx">match</span><span class="p">(</span><span class="nx">OFFLINE_URL</span><span class="p">);</span>
+      <span class="p">})</span>
+    <span class="p">);</span>
+  <span class="p">}</span>
+
+  <span class="c1">// If our if() condition is false, then this fetch handler won't intercept the request.</span>
+  <span class="c1">// If there are any other fetch handlers registered, they will get a chance to call</span>
+  <span class="c1">// event.respondWith(). If no fetch handlers call event.respondWith(), the request will be</span>
+  <span class="c1">// handled by the browser as if there were no service worker involvement.</span>
+<span class="p">});</span></code></pre></figure>
+
+
+
+
+
+    <script>
+      /* jshint ignore:start */
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+          (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+        m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+      ga('create', 'UA-53563471-1', 'auto');
+      ga('send', 'pageview');
+      /* jshint ignore:end */
+    </script>
+  </body>
+</html>
